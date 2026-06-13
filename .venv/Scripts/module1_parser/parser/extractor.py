@@ -17,8 +17,6 @@ from typing import Optional
 from parser.models import ResumeData, ExperienceEntry, EducationEntry, ProjectEntry
 
 # ── Load spaCy model once at import time (not per-request) ──────────────────
-# en_core_web_sm is a small English model that can detect:
-#   PERSON, ORG (organization), GPE (city/country), DATE, etc.
 try:
     nlp = spacy.load("en_core_web_sm")
 except OSError:
@@ -29,34 +27,17 @@ except OSError:
 
 # ============================================================
 # SECTION 1 — REGEX EXTRACTORS
-# These use regular expression patterns to find specific data.
 # ============================================================
 
 def extract_email(text: str) -> Optional[str]:
-    """
-    Find an email address using regex.
-    Pattern breakdown:
-      [a-zA-Z0-9._%+-]+   → username (letters, digits, dots, etc.)
-      @                   → literal @ sign
-      [a-zA-Z0-9.-]+      → domain name
-      \.[a-zA-Z]{2,}      → TLD like .com, .pk, .io
-    """
     pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
     match = re.search(pattern, text)
     return match.group(0) if match else None
 
 
 def extract_phone(text: str) -> Optional[str]:
-    """
-    Find a phone number. Handles many formats:
-      +92-300-1234567   (Pakistani)
-      +1 (234) 567-8900 (US)
-      0300 1234567      (local)
-      03001234567       (no spaces)
-    """
     pattern = r"(\+?\d[\d\s\-().]{7,}\d)"
     matches = re.findall(pattern, text)
-    # Return the first match that's at least 7 digits long
     for match in matches:
         digits_only = re.sub(r"\D", "", match)
         if len(digits_only) >= 7:
@@ -65,14 +46,12 @@ def extract_phone(text: str) -> Optional[str]:
 
 
 def extract_linkedin(text: str) -> Optional[str]:
-    """Find a LinkedIn profile URL."""
     pattern = r"(?:https?://)?(?:www\.)?linkedin\.com/in/[\w\-]+"
     match = re.search(pattern, text, re.IGNORECASE)
     return match.group(0) if match else None
 
 
 def extract_github(text: str) -> Optional[str]:
-    """Find a GitHub profile URL."""
     pattern = r"(?:https?://)?(?:www\.)?github\.com/[\w\-]+"
     match = re.search(pattern, text, re.IGNORECASE)
     return match.group(0) if match else None
@@ -80,44 +59,22 @@ def extract_github(text: str) -> Optional[str]:
 
 # ============================================================
 # SECTION 2 — SPACY NER EXTRACTORS
-# spaCy reads the text and labels entities like PERSON, GPE.
 # ============================================================
 
 def extract_name(text: str) -> Optional[str]:
-    """
-    Use spaCy Named Entity Recognition to find the person's name.
-
-    How it works:
-    1. spaCy reads the first ~500 characters (name is usually at top)
-    2. It labels each entity it finds: PERSON, ORG, DATE, etc.
-    3. We return the first PERSON entity found.
-
-    Limitation: spaCy sometimes misses names or tags them as ORG.
-    The first 500 chars heuristic works for standard resume formats.
-    """
-    # Only look at the top of the resume for the name
     top_text = text[:500]
     doc = nlp(top_text)
-
     for ent in doc.ents:
         if ent.label_ == "PERSON":
             return ent.text.strip()
-
-    # Fallback: first non-empty line is often the name
     first_line = next((line.strip() for line in text.splitlines() if line.strip()), None)
-    # Only use if it looks like a name (2-4 words, no special chars)
     if first_line and len(first_line.split()) <= 4 and not re.search(r"[@/]", first_line):
         return first_line
-
     return None
 
 
 def extract_location(text: str) -> Optional[str]:
-    """
-    Use spaCy NER to find a city or country (GPE = Geo-Political Entity).
-    We scan the whole text and return the first GPE found.
-    """
-    doc = nlp(text[:1000])  # Location usually appears near the top
+    doc = nlp(text[:1000])
     for ent in doc.ents:
         if ent.label_ == "GPE":
             return ent.text.strip()
@@ -126,11 +83,8 @@ def extract_location(text: str) -> Optional[str]:
 
 # ============================================================
 # SECTION 3 — SECTION SPLITTER
-# Resumes are divided into sections (SKILLS, EXPERIENCE, etc.)
-# We split the text by these headers to isolate each block.
 # ============================================================
 
-# Common section header keywords. We match them case-insensitively.
 SECTION_HEADERS = {
     "summary":          ["summary", "objective", "profile", "about me", "about"],
     "skills":           ["skills", "technical skills", "core competencies",
@@ -147,31 +101,17 @@ SECTION_HEADERS = {
 
 
 def split_into_sections(text: str) -> dict:
-    """
-    Split resume text into labeled sections.
-
-    Approach:
-    1. Go line by line.
-    2. Check if a line matches any known section header.
-    3. Collect all lines until the next header into that section.
-
-    Returns:
-        A dict like: {"skills": "Python\nJava\n...", "experience": "..."}
-    """
     sections = {key: "" for key in SECTION_HEADERS}
-    current_section = "summary"  # Assume text before first header is summary
+    current_section = "summary"
     lines = text.splitlines()
 
     for line in lines:
         stripped = line.strip().lower()
-
-        # Check if this line is a section header
         matched_section = None
         for section_name, keywords in SECTION_HEADERS.items():
             if any(stripped == kw or stripped.startswith(kw + ":") for kw in keywords):
                 matched_section = section_name
                 break
-
         if matched_section:
             current_section = matched_section
         else:
@@ -182,67 +122,84 @@ def split_into_sections(text: str) -> dict:
 
 # ============================================================
 # SECTION 4 — FIELD PARSERS FOR EACH SECTION
-# Each function takes a section's raw text and returns clean data.
 # ============================================================
 
 def parse_skills(skills_text: str) -> list:
     """
     Extract a list of skills from the skills section.
 
-    Skills are typically separated by:
-      - Commas: "Python, Java, SQL"
-      - Bullet points / newlines: each skill on its own line
-      - Pipes: "Python | Java | SQL"
+    Handles any reasonable format:
+      - Comma-separated:  "Python, Java, SQL"
+      - Bullet/newline:   each skill on its own line
+      - Pipes:            "Python | Java | SQL"
+      - Semicolons:       "Python; Java; SQL"
+      - Colons used as category headers: "Languages: Python, Java"
+        → strips the category label and keeps the skills
+      - Slash-separated:  "Python/Django"  → kept as-is (one skill)
+      - Numbered lists:   "1. Python  2. Java" → strips the number
+      - Inline paragraphs / free-form sentences → each token that
+        looks like a recognisable skill word is kept
 
-    We split on all of these and clean up the results.
+    No hard length cap is enforced so that compound skill names
+    (e.g. "Machine Learning & Deep Learning") are not silently dropped.
+    Very long lines that look like prose sentences are split further.
     """
     if not skills_text.strip():
         return []
 
-    # Replace bullets, pipes, semicolons with commas, then split
-    cleaned = re.sub(r"[•\-\|;]", ",", skills_text)
-    raw_skills = re.split(r"[,\n]", cleaned)
+    text = skills_text
+
+    # ── 1. Strip category-header prefixes like "Languages: " ──────────────
+    # e.g. "Languages: Python, Java" → "Python, Java"
+    text = re.sub(r"^\s*[\w &/]+\s*:\s*", "", text, flags=re.MULTILINE)
+
+    # ── 2. Normalise separators ────────────────────────────────────────────
+    # Bullets, pipes, semicolons → commas
+    text = re.sub(r"[•●▪\-\|;]", ",", text)
+    # Numbered-list prefixes like "1." "2)" → comma
+    text = re.sub(r"^\s*\d+[\.\)]\s*", ",", text, flags=re.MULTILINE)
+
+    # ── 3. Split on commas and newlines ───────────────────────────────────
+    raw_tokens = re.split(r"[,\n]", text)
 
     skills = []
-    for skill in raw_skills:
-        skill = skill.strip()
-        # Skip very short (noise) or very long (sentences) items
-        if skill and 2 <= len(skill) <= 50:
-            skills.append(skill)
+    for token in raw_tokens:
+        token = token.strip().strip(".")
 
-    # Deduplicate while preserving order
+        if not token:
+            continue
+
+        # If the token is a long prose sentence (> ~60 chars and has spaces),
+        # try to break it up further on " and ", " & ", or multiple spaces.
+        if len(token) > 60 and " " in token:
+            sub_tokens = re.split(r"\s{2,}|\band\b|&", token, flags=re.IGNORECASE)
+            for sub in sub_tokens:
+                sub = sub.strip().strip(".")
+                if sub and len(sub) >= 2:
+                    skills.append(sub)
+        else:
+            if len(token) >= 2:
+                skills.append(token)
+
+    # ── 4. Deduplicate (case-insensitive), preserve first-seen order ───────
     seen = set()
-    unique_skills = []
+    unique = []
     for s in skills:
-        if s.lower() not in seen:
-            seen.add(s.lower())
-            unique_skills.append(s)
+        key = s.lower()
+        if key not in seen:
+            seen.add(key)
+            unique.append(s)
 
-    return unique_skills
+    return unique
 
 
 def parse_experience(experience_text: str) -> list:
-    """
-    Extract structured experience entries.
-
-    This is the hardest part of resume parsing because the format
-    varies so much. We use a heuristic approach:
-    1. Split text into blocks separated by blank lines.
-    2. For each block, try to detect title, company, duration.
-    3. The rest becomes the description.
-
-    Heuristics used:
-    - Duration: looks for year ranges like "2020 - 2023" or "Jan 2021 – Present"
-    - Title/Company: usually the first 1-2 lines of the block
-    """
     if not experience_text.strip():
         return []
 
-    # Split into blocks (separated by 1+ blank lines)
     blocks = re.split(r"\n{2,}", experience_text.strip())
     entries = []
 
-    # Regex to detect date ranges
     duration_pattern = re.compile(
         r"((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\.?\s?\d{4})"
         r"\s*[-–—to]+\s*"
@@ -261,11 +218,9 @@ def parse_experience(experience_text: str) -> list:
         description_lines = []
 
         for i, line in enumerate(lines):
-            # Check if this line contains a date range
             dur_match = duration_pattern.search(line)
             if dur_match and not duration:
                 duration = dur_match.group(0).strip()
-                # The rest of the line (minus the date) might be company or title
                 remainder = line[:dur_match.start()].strip(" |,–-")
                 if remainder and not company:
                     company = remainder
@@ -276,7 +231,6 @@ def parse_experience(experience_text: str) -> list:
             else:
                 description_lines.append(line)
 
-        # Only add if we found at least one meaningful field
         if title or company:
             entries.append(ExperienceEntry(
                 title=title,
@@ -289,27 +243,12 @@ def parse_experience(experience_text: str) -> list:
 
 
 def parse_education(education_text: str) -> list:
-    """
-    Extract structured education entries.
-
-    Format varies, but usually looks like:
-      BS Computer Science
-      University of Karachi
-      2021
-
-    Or: "BS Computer Science, University of Karachi, 2021"
-
-    We split into blocks and try to detect degree, institution, year.
-    """
     if not education_text.strip():
         return []
 
     blocks = re.split(r"\n{2,}", education_text.strip())
     entries = []
-
     year_pattern = re.compile(r"\b(19|20)\d{2}\b")
-
-    # Keywords that suggest a degree
     degree_keywords = [
         "bs", "be", "bsc", "ba", "ms", "msc", "ma", "mba", "phd",
         "bachelor", "master", "doctorate", "diploma", "associate",
@@ -326,12 +265,9 @@ def parse_education(education_text: str) -> list:
         year = None
 
         for line in lines:
-            # Check for year
             year_match = year_pattern.search(line)
             if year_match and not year:
                 year = year_match.group(0)
-
-            # Check for degree keywords
             line_lower = line.lower()
             if any(kw in line_lower for kw in degree_keywords) and not degree:
                 degree = line
@@ -350,125 +286,204 @@ def parse_education(education_text: str) -> list:
 
 def parse_projects(projects_text: str) -> list:
     """
-    Extract structured project entries.
+    Extract structured project entries from free-form text.
 
-    Typical format:
-      Project Name
-      Description of what it does
-      Tech: Python, BERT, Flask
+    Handles all common resume project formats:
 
-    We split by blank lines and extract name, description, tech stack.
+    1. Blank-line-separated blocks (classic):
+         Project Name
+         Description line
+         Tech: Python, Flask
+
+    2. Bullet-prefixed entries (no blank lines between projects):
+         • Project Name — description here
+         • Another Project: did X using Python and React
+
+    3. Numbered lists:
+         1. Project Name
+            Description
+         2. Next Project
+
+    4. Inline tech — finds the tech stack even when not on a
+       dedicated "Tech:" line, by scanning for parenthesised
+       lists, "using X, Y, Z", "built with X", or slash/comma
+       clusters that look like technology names.
+
+    5. Single-line entries:
+         Project Name – short description (Python, Flask)
+
+    Tech stack detection is expanded to recognise:
+      - "tech:", "technologies:", "tools:", "built with:",
+        "stack:", "frameworks:", "libraries:", "languages:"
+      - Parenthesised tech at end of line: "My App (Python, React)"
+      - "using X, Y and Z" anywhere in description
     """
     if not projects_text.strip():
         return []
 
-    blocks = re.split(r"\n{2,}", projects_text.strip())
-    entries = []
-
-    tech_pattern = re.compile(
-        r"(?:tech(?:nologies)?(?:\s*used)?|stack|tools?|built with)\s*[:\-]?\s*(.*)",
+    # ── Patterns ──────────────────────────────────────────────────────────
+    # Explicit tech-label line
+    tech_label_re = re.compile(
+        r"^(?:tech(?:nologies)?(?:\s*used)?|stack|tools?|built\s+with"
+        r"|frameworks?|libraries|languages?)\s*[:\-]\s*(.*)",
         re.IGNORECASE
     )
+    # Parenthesised tech at end: "My App (Python, React, SQL)"
+    paren_tech_re = re.compile(r"\(([^)]{3,})\)\s*$")
+    # "using X, Y, Z" or "built with X"
+    using_re = re.compile(
+        r"(?:using|built\s+with|written\s+in|developed\s+(?:in|with))\s+"
+        r"([\w\s,/\-\.+#]+)",
+        re.IGNORECASE
+    )
+    # Bullet prefixes: •, ●, ▪, -, *, or numbered "1." "2)"
+    bullet_re = re.compile(r"^\s*(?:[•●▪\-\*]|\d+[\.\)])\s+")
+    # Em-dash or colon used as name–description separator on one line
+    separator_re = re.compile(r"\s+[–—:]\s+", re.UNICODE)
 
-    for block in blocks:
-        lines = [l.strip() for l in block.splitlines() if l.strip()]
-        if not lines:
+    def _extract_tech(text_fragment: str) -> list:
+        """Pull a tech list from any fragment of text."""
+        # Try "using / built with …"
+        m = using_re.search(text_fragment)
+        if m:
+            raw = m.group(1)
+            items = [t.strip() for t in re.split(r"[,/]|\band\b", raw, flags=re.IGNORECASE)
+                     if t.strip() and len(t.strip()) > 1]
+            if items:
+                return items
+        # Try parenthesised list
+        m = paren_tech_re.search(text_fragment)
+        if m:
+            raw = m.group(1)
+            items = [t.strip() for t in re.split(r"[,|;/]", raw) if t.strip()]
+            if items:
+                return items
+        return []
+
+    # ── Step 1: decide splitting strategy ─────────────────────────────────
+    # If bullet-prefixed lines exist, split on bullets (ignoring blank lines).
+    # Otherwise fall back to blank-line block splitting.
+    lines = projects_text.splitlines()
+    has_bullets = sum(1 for l in lines if bullet_re.match(l)) >= 2
+
+    if has_bullets:
+        # Regroup: each bullet starts a new project; continuation lines
+        # (non-bullet, non-blank) belong to the current project.
+        raw_blocks = []
+        current: list = []
+        for line in lines:
+            if bullet_re.match(line):
+                if current:
+                    raw_blocks.append("\n".join(current))
+                # Strip the bullet prefix before storing
+                current = [bullet_re.sub("", line).strip()]
+            elif line.strip():
+                current.append(line.strip())
+        if current:
+            raw_blocks.append("\n".join(current))
+    else:
+        # Classic blank-line separation
+        raw_blocks = re.split(r"\n{2,}", projects_text.strip())
+
+    entries = []
+
+    for block in raw_blocks:
+        block_lines = [l.strip() for l in block.splitlines() if l.strip()]
+        if not block_lines:
             continue
 
-        name = lines[0] if lines else None
+        name = None
         description_lines = []
         tech_stack = []
 
-        for line in lines[1:]:
-            tech_match = tech_pattern.match(line)
+        for i, line in enumerate(block_lines):
+            # ── Check for explicit tech-label line ──────────────────────
+            tech_match = tech_label_re.match(line)
             if tech_match:
-                # Parse the tech list from the matched portion
-                tech_raw = tech_match.group(1)
-                tech_stack = [t.strip() for t in re.split(r"[,|;]", tech_raw) if t.strip()]
-            else:
-                description_lines.append(line)
+                raw_tech = tech_match.group(1)
+                tech_stack = [t.strip() for t in re.split(r"[,|;/]", raw_tech) if t.strip()]
+                continue  # don't add to description
 
-        # If no explicit tech line, try to find inline tech from description
-        if not tech_stack and description_lines:
-            combined = " ".join(description_lines)
-            # Look for patterns like "using Python, Flask, and SQL"
-            using_match = re.search(r"using\s+([\w\s,/\-\.]+)", combined, re.IGNORECASE)
-            if using_match:
-                tech_raw = using_match.group(1)
-                tech_stack = [t.strip() for t in re.split(r"[,and ]+", tech_raw)
-                               if t.strip() and len(t.strip()) > 1]
+            # ── First line is the project name ──────────────────────────
+            if i == 0:
+                # Handle "Name – description" or "Name: description" on one line
+                parts = separator_re.split(line, maxsplit=1)
+                name = parts[0].strip()
+                # Strip parenthesised tech from name if present
+                name_clean = paren_tech_re.sub("", name).strip()
+                if name_clean:
+                    name = name_clean
+                if len(parts) > 1:
+                    rest = parts[1].strip()
+                    # Try to pull tech from this inline description part
+                    inline_tech = _extract_tech(rest)
+                    if inline_tech and not tech_stack:
+                        tech_stack = inline_tech
+                    # Strip the "using …" clause before saving as description
+                    rest_clean = using_re.sub("", rest).strip().strip(".")
+                    if rest_clean:
+                        description_lines.append(rest_clean)
+            else:
+                # Try to pull tech from description lines
+                inline_tech = _extract_tech(line)
+                if inline_tech and not tech_stack:
+                    tech_stack = inline_tech
+                # Keep line as description (minus any "using …" clause)
+                desc_line = using_re.sub("", line).strip().strip(".")
+                # Also strip trailing parenthesised tech
+                desc_line = paren_tech_re.sub("", desc_line).strip()
+                if desc_line:
+                    description_lines.append(desc_line)
+
+        # ── Also scan the whole block for tech if still empty ──────────
+        if not tech_stack:
+            tech_stack = _extract_tech(block)
 
         if name:
             entries.append(ProjectEntry(
                 name=name,
                 description=" ".join(description_lines) or None,
-                tech_stack=tech_stack
+                tech_stack=tech_stack,
             ))
 
     return entries
 
 
 def parse_certifications(cert_text: str) -> list:
-    """
-    Extract a list of certification names.
-    Each line (or comma-separated item) is one certification.
-    """
     if not cert_text.strip():
         return []
 
     cleaned = re.sub(r"[•\-\|]", "\n", cert_text)
     certs = []
-
     for line in cleaned.splitlines():
         line = line.strip()
-        if line and len(line) > 5:  # Skip very short noise
+        if line and len(line) > 5:
             certs.append(line)
-
     return certs
 
 
 def parse_summary(summary_text: str) -> Optional[str]:
-    """
-    Clean and return the summary/objective section.
-    Just strip whitespace and return as a single paragraph.
-    """
     if not summary_text.strip():
         return None
-    # Collapse multiple spaces/newlines into single spaces
     cleaned = re.sub(r"\s+", " ", summary_text).strip()
     return cleaned if cleaned else None
 
 
 # ============================================================
 # SECTION 5 — MASTER EXTRACTOR
-# The single function called by main.py
 # ============================================================
 
 def extract_resume_data(text: str) -> ResumeData:
-    """
-    Master function: takes raw resume text, returns a ResumeData object.
-
-    Process:
-    1. Run regex extractors on the full text (email, phone, URLs)
-    2. Run spaCy extractors on the full text (name, location)
-    3. Split text into sections
-    4. Run section parsers on each block
-    5. Assemble everything into a ResumeData object
-    """
-    # ── Step 1: Regex fields (scan full text) ───────────────
     email = extract_email(text)
     phone = extract_phone(text)
     linkedin = extract_linkedin(text)
     github = extract_github(text)
 
-    # ── Step 2: NER fields (spaCy on full text) ─────────────
     name = extract_name(text)
     location = extract_location(text)
 
-    # ── Step 3: Split text into labeled sections ─────────────
     sections = split_into_sections(text)
 
-    # ── Step 4: Parse each section ───────────────────────────
     summary = parse_summary(sections["summary"])
     skills = parse_skills(sections["skills"])
     experience = parse_experience(sections["experience"])
@@ -476,7 +491,6 @@ def extract_resume_data(text: str) -> ResumeData:
     projects = parse_projects(sections["projects"])
     certifications = parse_certifications(sections["certifications"])
 
-    # ── Step 5: Assemble and return ──────────────────────────
     return ResumeData(
         name=name,
         email=email,
