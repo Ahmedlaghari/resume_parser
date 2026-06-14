@@ -24,6 +24,7 @@ from dotenv import load_dotenv
 from parser.file_reader import extract_text
 from parser.extractor import extract_resume_data
 from parser.models import ResumeData
+from parser.extractor_llm import extract_resume_datallm
 
 # Load environment variables from .env
 load_dotenv()
@@ -99,8 +100,8 @@ async def parse_resume(file: UploadFile = File(...)):
         # ── Step 1: Extract raw text ─────────────────────────
         raw_text = extract_text(tmp_path)
 
-        # ── Step 2: Parse structured fields ──────────────────
-        resume_data = extract_resume_data(raw_text)
+        # ── Step 2: Parse structured fields ─────────────
+        resume_data = extract_resume_datallm(raw_text)
 
         return resume_data
 
