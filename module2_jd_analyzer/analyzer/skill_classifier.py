@@ -1,151 +1,176 @@
-"""
-skill_classifier.py — Extract and classify skills from a JD.
+# ============================================================
+# skill_classifier.py — LLM-powered skill extraction + classification.
+#
+# Replaces the SKILLS_DB keyword scan and context-window heuristics
+# with a single structured LLM call via instructor + Groq.
+#
+# The model is asked to:
+#   1. Identify every technical and process skill mentioned in the JD.
+#   2. Classify each as "required" or "nice_to_have" based on context.
+#
+# Dependencies:
+#   pip install groq instructor pydantic python-dotenv
+#
+# Usage:
+#   from analyzer.skill_classifier import extract_and_classify_skills
+#   req, nice = extract_and_classify_skills(clean_text)
+# ============================================================
 
-Two things happen here:
-  1. DETECTION  — scan the JD for known tech skills using a master list.
-  2. CLASSIFICATION — decide if each skill is "required" or "nice-to-have"
-     by looking at the surrounding sentence/line for signal words.
-
-Method A (rule-based) is implemented here — it handles the vast majority
-of real JDs correctly and needs no model download or GPU.
-
-If accuracy on your real JDs turns out to be < 80%, the next upgrade is
-to add Method B (HuggingFace zero-shot classification) as a second pass.
-"""
-
+import os
 import re
+from typing import Literal
 
-# --------------------------------------------------------------------------
-# MASTER SKILLS LIST
-# Extend this list freely — it's just Python strings.
-# Lower-case everything here; matching is done case-insensitively.
-# --------------------------------------------------------------------------
-SKILLS_DB: list[str] = [
-    # Languages
-    "python", "java", "javascript", "typescript", "c++", "c#", "go", "rust",
-    "scala", "kotlin", "swift", "r", "matlab", "bash", "shell", "perl", "ruby",
+from dotenv import load_dotenv
+from groq import Groq
+import instructor
+from pydantic import BaseModel, Field
 
-    # ML / AI
-    "machine learning", "deep learning", "nlp", "natural language processing",
-    "computer vision", "reinforcement learning", "mlops", "llm", "generative ai",
-    "pytorch", "tensorflow", "keras", "scikit-learn", "xgboost", "lightgbm",
-    "hugging face", "transformers", "langchain", "openai", "stable diffusion",
-    "yolo", "bert", "gpt",
+load_dotenv()
 
-    # Data
-    "sql", "nosql", "postgresql", "mysql", "mongodb", "redis", "elasticsearch",
-    "cassandra", "bigquery", "snowflake", "dbt", "spark", "hadoop", "kafka",
-    "airflow", "pandas", "numpy", "matplotlib", "seaborn", "plotly", "tableau",
-    "power bi", "looker",
-
-    # Cloud & DevOps
-    "aws", "azure", "gcp", "google cloud", "docker", "kubernetes", "terraform",
-    "ansible", "jenkins", "github actions", "ci/cd", "mlflow", "kubeflow",
-    "sagemaker", "vertex ai", "azure ml", "databricks",
-
-    # Backend / APIs
-    "fastapi", "flask", "django", "rest api", "graphql", "grpc", "microservices",
-    "rabbitmq", "celery", "nginx", "linux", "git", "github", "gitlab",
-
-    # Frontend (to avoid false positives on Backend JDs)
-    "react", "angular", "vue", "next.js", "html", "css",
-
-    # Soft / Process skills (often listed as requirements)
-    "agile", "scrum", "jira", "confluence",
-]
-
-# --------------------------------------------------------------------------
-# CONTEXT WORDS that indicate a skill is REQUIRED
-# --------------------------------------------------------------------------
-REQUIRED_SIGNALS = [
-    "must", "required", "requirement", "essential", "mandatory",
-    "minimum", "necessary", "expected", "need to have", "needs to have",
-    "you have", "you must", "you will have", "you should have",
-    "we require", "we expect",
-]
-
-# --------------------------------------------------------------------------
-# CONTEXT WORDS that indicate a skill is NICE-TO-HAVE
-# --------------------------------------------------------------------------
-PREFERRED_SIGNALS = [
-    "preferred", "nice to have", "nice-to-have", "bonus", "plus",
-    "advantage", "desirable", "ideally", "familiarity with",
-    "exposure to", "knowledge of", "experience with", "not required",
-    "beneficial", "good to have",
-]
+# ── Instructor-patched Groq client ────────────────────────────────────────
+_client = instructor.from_groq(
+    Groq(api_key=os.getenv("GROQ_API_KEY")),
+    mode=instructor.Mode.JSON,
+)
 
 
-def _get_context_window(text: str, skill: str, window: int = 120) -> str:
-    """
-    Return up to `window` characters surrounding the first occurrence
-    of `skill` in `text`.  We use this snippet to look for signal words.
-    """
-    idx = text.lower().find(skill.lower())
-    if idx == -1:
-        return ""
-    start = max(0, idx - window)
-    end = min(len(text), idx + len(skill) + window)
-    return text[start:end].lower()
+# ============================================================
+# SECTION 1 — PYDANTIC MODELS
+# ============================================================
+
+class SkillEntry(BaseModel):
+    name: str = Field(
+        description=(
+            "The skill name exactly as it should be displayed, properly cased. "
+            "Examples: 'Python', 'PyTorch', 'REST API', 'CI/CD', 'AWS', 'Docker'."
+        )
+    )
+    classification: Literal["required", "nice_to_have"] = Field(
+        description=(
+            "Whether the skill is required or nice-to-have. "
+            "Mark as 'required' if the surrounding text uses words like: "
+            "'must', 'required', 'essential', 'mandatory', 'minimum', "
+            "'you have', 'you must', 'we require'. "
+            "Mark as 'nice_to_have' if the surrounding text uses words like: "
+            "'preferred', 'nice to have', 'bonus', 'plus', 'advantage', "
+            "'desirable', 'ideally', 'familiarity with', 'exposure to', "
+            "'beneficial', 'good to have'. "
+            "Default to 'required' when context is ambiguous."
+        )
+    )
 
 
-def _classify_skill(context: str) -> str:
-    """
-    Given a context snippet, return 'required' or 'nice_to_have'.
-    Default to 'required' — most skills in JDs are required unless
-    explicitly marked otherwise.
-    """
-    for signal in PREFERRED_SIGNALS:
-        if signal in context:
-            return "nice_to_have"
-    # No preferred signal found → treat as required
-    return "required"
+class SkillsResult(BaseModel):
+    skills: list[SkillEntry] = Field(
+        default_factory=list,
+        description=(
+            "Complete list of all technical and process skills found in the JD. "
+            "Include: programming languages, frameworks, libraries, cloud platforms, "
+            "DevOps tools, databases, ML/AI tools, methodologies (Agile, Scrum), "
+            "and soft/process skills explicitly listed as requirements. "
+            "Do NOT include vague traits like 'communication skills' or "
+            "'problem-solving' unless they are listed as explicit requirements."
+        ),
+    )
 
+
+# ============================================================
+# SECTION 2 — PROMPT
+# ============================================================
+
+_SYSTEM_PROMPT = """\
+You are a precise technical skill extractor for job descriptions.
+
+Your task:
+1. Read the job description carefully.
+2. Identify every concrete technical and process skill mentioned.
+3. For each skill, decide whether it is "required" or "nice_to_have" \
+   based on the surrounding language.
+4. Return the results as a structured JSON object.
+
+Rules:
+- Include each unique skill only once (deduplicate).
+- Use consistent, properly-cased display names (e.g. 'PyTorch', not 'pytorch').
+- Do not include soft traits like 'teamwork' or 'communication' \
+  unless the JD explicitly lists them as requirements.
+- Do not infer skills not mentioned in the text.
+"""
+
+
+# ============================================================
+# SECTION 3 — MAIN FUNCTION
+# ============================================================
 
 def extract_and_classify_skills(
     text: str,
+    *,
+    model: str = "llama-3.3-70b-versatile",
+    max_tokens: int = 1024,
+    max_retries: int = 2,
 ) -> tuple[list[str], list[str]]:
     """
-    Main entry point.
+    Extract and classify all skills mentioned in a job description.
 
-    Scans the full JD text for known skills, then classifies each one.
+    Args:
+        text:        Full cleaned JD text.
+        model:       Groq model to use.
+        max_tokens:  Max tokens for the LLM response.
+        max_retries: Retry attempts if Pydantic validation fails.
 
     Returns:
-        (required_skills, nice_to_have_skills) — two lists of strings.
+        (required_skills, nice_to_have_skills) — two lists of skill name strings.
 
     Usage:
         from analyzer.skill_classifier import extract_and_classify_skills
         req, nice = extract_and_classify_skills(clean_text)
     """
-    required: list[str] = []
-    nice_to_have: list[str] = []
-    seen: set[str] = set()   # avoid duplicates
+    # Strip control chars before sending
+    clean = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", text).strip()
 
-    lower_text = text.lower()
+    result: SkillsResult = _client.chat.completions.create(
+        model=model,
+        max_tokens=max_tokens,
+        max_retries=max_retries,
+        messages=[
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": f"Extract and classify skills from this JD:\n\n{clean}"},
+        ],
+        response_model=SkillsResult,
+    )
 
-    for skill in SKILLS_DB:
-        # Use word-boundary matching for short skills to avoid false positives
-        # e.g. "r" should not match inside "requirements"
-        if len(skill) <= 2:
-            pattern = rf"\b{re.escape(skill)}\b"
-            if not re.search(pattern, lower_text):
-                continue
-        else:
-            if skill not in lower_text:
-                continue
+    required = [s.name for s in result.skills if s.classification == "required"]
+    nice_to_have = [s.name for s in result.skills if s.classification == "nice_to_have"]
 
-        # Deduplicate (title-cased for display)
-        display = skill.title()
-        if display in seen:
-            continue
-        seen.add(display)
-
-        # Classify based on surrounding context
-        context = _get_context_window(text, skill)
-        bucket = _classify_skill(context)
-
-        if bucket == "required":
-            required.append(display)
-        else:
-            nice_to_have.append(display)
+    print("\n========== SKILL CLASSIFIER OUTPUT ==========")
+    print(f"Required ({len(required)}):       {required}")
+    print(f"Nice-to-have ({len(nice_to_have)}): {nice_to_have}")
+    print("=============================================\n")
 
     return required, nice_to_have
+
+
+# ============================================================
+# SECTION 4 — QUICK TEST
+# ============================================================
+
+if __name__ == "__main__":
+    SAMPLE = """
+    Senior ML Engineer — AI Platform
+
+    Requirements
+    - Must have 5+ years of Python experience.
+    - Strong proficiency in PyTorch or TensorFlow is required.
+    - Experience with Kubernetes and Docker is essential.
+    - Familiarity with SQL and NoSQL databases.
+    - AWS or GCP certification mandatory.
+
+    Nice to Have
+    - Exposure to LangChain or LlamaIndex is a bonus.
+    - Familiarity with Airflow preferred.
+    - Knowledge of React for internal tooling dashboards.
+    - Experience with Agile / Scrum is desirable.
+    """
+
+    req, nice = extract_and_classify_skills(SAMPLE)
+    print("Required:", req)
+    print("Nice-to-have:", nice)

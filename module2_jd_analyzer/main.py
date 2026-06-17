@@ -29,17 +29,14 @@ except ImportError:
 # Our analyzer modules
 from analyzer import (
     clean_text,
-    extract_job_title, extract_company, extract_location,
-    extract_employment_type, extract_experience, extract_salary,
-    extract_responsibilities, extract_qualifications,
-    extract_benefits, extract_industry,
+    extract_jd_data,
     extract_and_classify_skills,
     detect_seniority,
     JobDescription,
 )
 
 # --------------------------------------------------------------------------
-load_dotenv()   # reads .env file — add ANTHROPIC_API_KEY here if needed later
+load_dotenv()
 # --------------------------------------------------------------------------
 
 app = FastAPI(
@@ -69,13 +66,16 @@ def analyze_jd_text(raw_text: str) -> JobDescription:
     # ── Step 1: clean the text ────────────────────────────────────────────
     text = clean_text(raw_text)
 
-    # ── Step 2: extract individual fields ────────────────────────────────
-    experience = extract_experience(text)
+    # ── Step 2: extract all base fields via LLM ───────────────────────────
+    jd = extract_jd_data(text)
 
     # ── Step 3: skill extraction & classification ─────────────────────────
     required_skills, nice_to_have_skills = extract_and_classify_skills(text)
 
-    # ── Step 4: keyword extraction (KeyBERT) ─────────────────────────────
+    # ── Step 4: seniority detection ───────────────────────────────────────
+    seniority_level = detect_seniority(text, jd.experience_required)
+
+    # ── Step 5: keyword extraction (KeyBERT) ─────────────────────────────
     if KEYBERT_AVAILABLE and kw_model and text.strip():
         raw_keywords = kw_model.extract_keywords(
             text,
@@ -85,26 +85,16 @@ def analyze_jd_text(raw_text: str) -> JobDescription:
         )
         keywords = [kw for kw, _score in raw_keywords]
     else:
-        # Fallback: just use the required skills as keywords
         keywords = required_skills[:10]
 
-    # ── Step 5: assemble the output ───────────────────────────────────────
-    return JobDescription(
-        job_title=extract_job_title(text),
-        company=extract_company(text),
-        location=extract_location(text),
-        employment_type=extract_employment_type(text),
-        seniority_level=detect_seniority(text, experience),
-        experience_required=experience,
-        salary_range=extract_salary(text),
-        required_skills=required_skills,
-        nice_to_have_skills=nice_to_have_skills,
-        responsibilities=extract_responsibilities(text),
-        qualifications=extract_qualifications(text),
-        keywords=keywords,
-        industry=extract_industry(text),
-        benefits=extract_benefits(text),
-    )
+    # ── Step 6: assemble final object ─────────────────────────────────────
+    # jd already has all base fields; we fill in the remaining three here.
+    jd.seniority_level = seniority_level
+    jd.required_skills = required_skills
+    jd.nice_to_have_skills = nice_to_have_skills
+    jd.keywords = keywords
+
+    return jd
 
 
 # ==========================================================================
@@ -149,7 +139,6 @@ async def analyze_jd_file(file: UploadFile = File(...)):
         raw_text = raw_bytes.decode("utf-8", errors="replace")
 
     elif filename.endswith(".pdf"):
-        # PDF support requires pypdf: pip install pypdf
         try:
             from pypdf import PdfReader
         except ImportError:

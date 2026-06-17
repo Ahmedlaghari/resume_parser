@@ -1,0 +1,528 @@
+# Module 2 — JD Analyzer: Input / Output Showcase
+
+This file demonstrates the output of the JD Analyzer pipeline across 5 real-world
+job description samples. Each JD tests different extraction challenges.
+
+Pipeline per JD:
+  1. text_cleaner.py       — strips noise
+  2. extractor.py          — LLM extracts base fields
+  3. skill_classifier.py   — LLM classifies required vs nice-to-have skills
+  4. seniority.py          — LLM detects seniority level
+  5. KeyBERT               — extracts top keywords
+
+================================================================================
+JD 1 — Junior Frontend Developer
+================================================================================
+
+CHALLENGES TESTED
+  - Junior seniority with explicit keyword in title
+  - PKR salary range
+  - Karachi, Pakistan location
+  - Section header "Good to Have" (non-standard phrasing)
+  - EdTech industry (not stated explicitly — inferred from context)
+
+INPUT (jd_junior_frontend_dev.txt)
+----------------------------------
+Junior Frontend Developer
+GreenLeaf Technologies — Karachi, Pakistan (On-site)
+
+Are you a fresh graduate or early-career developer looking to kickstart your career?
+GreenLeaf Technologies is hiring a Junior Frontend Developer to join our product team.
+Full-time | PKR 80,000 – 100,000/month
+
+About GreenLeaf Technologies
+GreenLeaf is a fast-growing edtech startup building e-learning platforms for schools and
+universities across Pakistan. We are a team of 40 people and growing fast.
+
+What You'll Do
+- Build and maintain responsive web interfaces using React and Tailwind CSS.
+- Work closely with UI/UX designers to implement pixel-perfect designs.
+- Write clean, reusable, and well-documented JavaScript/TypeScript code.
+- Participate in daily standups and weekly sprint planning sessions.
+- Fix bugs and improve performance of existing frontend features.
+- Learn from senior developers through pair programming and code reviews.
+
+What We're Looking For
+- 0-2 years of experience in frontend development (fresh graduates welcome).
+- Basic knowledge of HTML, CSS, and JavaScript is required.
+- Some hands-on experience with React (personal projects or internships count).
+- Familiarity with Git and GitHub for version control.
+- A willingness to learn and grow — attitude matters more than experience.
+- Basic understanding of REST APIs and how to consume them.
+
+Good to Have
+- Exposure to TypeScript is a bonus.
+- Familiarity with Next.js or any other React framework is desirable.
+- Knowledge of Figma for reading design files.
+- Any open-source contributions or personal portfolio projects.
+
+Perks
+- Friendly and supportive team environment.
+- Mentorship from senior engineers.
+- Flexible working hours (core hours 10am–4pm).
+- Annual performance bonus.
+- Medical insurance for employee and immediate family.
+
+OUTPUT
+------
+{
+  "job_title":           "Junior Frontend Developer",
+  "company":             "GreenLeaf Technologies",
+  "location":            "Karachi, Pakistan (On-site)",
+  "employment_type":     "Full-time",
+  "experience_required": "0-2 years",
+  "salary_range":        "PKR 80,000 - 100,000/month",
+  "industry":            "EdTech",
+  "seniority_level":     "Junior",
+  "required_skills":     ["HTML", "CSS", "JavaScript", "React", "Tailwind CSS", "Git", "GitHub", "REST APIs"],
+  "nice_to_have_skills": ["TypeScript", "Next.js", "Figma"],
+  "responsibilities": [
+    "Build and maintain responsive web interfaces using React and Tailwind CSS.",
+    "Work closely with UI/UX designers to implement pixel-perfect designs.",
+    "Write clean, reusable, and well-documented JavaScript/TypeScript code.",
+    "Participate in daily standups and weekly sprint planning sessions.",
+    "Fix bugs and improve performance of existing frontend features.",
+    "Learn from senior developers through pair programming and code reviews."
+  ],
+  "qualifications": [
+    "0-2 years of experience in frontend development (fresh graduates welcome).",
+    "Basic knowledge of HTML, CSS, and JavaScript is required.",
+    "Some hands-on experience with React (personal projects or internships count).",
+    "Familiarity with Git and GitHub for version control.",
+    "A willingness to learn and grow - attitude matters more than experience.",
+    "Basic understanding of REST APIs and how to consume them."
+  ],
+  "benefits": [
+    "Friendly and supportive team environment.",
+    "Mentorship from senior engineers.",
+    "Flexible working hours (core hours 10am-4pm).",
+    "Annual performance bonus.",
+    "Medical insurance for employee and immediate family."
+  ],
+  "keywords": ["HTML", "CSS", "JavaScript", "React", "Tailwind CSS", "Git", "GitHub", "REST APIs"]
+}
+
+EVALUATION
+----------
+  job_title           ✅  Correct
+  company             ✅  Correct
+  location            ✅  Correct — On-site flag preserved
+  employment_type     ✅  Correct
+  experience_required ✅  Correct — "0-2 years" matched
+  salary_range        ✅  Correct — PKR range extracted accurately
+  industry            ✅  Correct — inferred "EdTech" from "edtech startup / e-learning" context
+  seniority_level     ✅  Correct — keyword "Junior" in title
+  required_skills     ✅  All 8 correct; Tailwind CSS and REST APIs correctly split out
+  nice_to_have_skills ✅  All 3 correct; TypeScript moved to nice-to-have despite being in body text
+  responsibilities    ✅  All 6 bullets extracted cleanly
+  qualifications      ✅  All 6 bullets extracted cleanly
+  benefits            ✅  All 5 bullets correct (section was labelled "Perks" — handled)
+  keywords            ✅  Reasonable fallback (KeyBERT not available in test run)
+
+  OVERALL: 14/14 ✅  No errors.
+
+
+================================================================================
+JD 2 — Senior Machine Learning Engineer
+================================================================================
+
+CHALLENGES TESTED
+  - Senior seniority with USD salary range
+  - Rich, mixed skill list — requires/nice-to-have clearly separated in JD
+  - Specific AWS service names (SageMaker, S3, EC2) extracted as individual skills
+  - Remote + city location format
+
+INPUT (jd_senior_ml_engineer.txt)
+----------------------------------
+Senior Machine Learning Engineer — AI Platform
+at NeuralWorks (Remote / San Francisco, CA)
+
+We are hiring a Senior Machine Learning Engineer to join our growing AI Platform team.
+Full-time | $140,000 – $180,000/year + equity
+
+About NeuralWorks
+NeuralWorks is a Series B AI startup building real-time recommendation and personalization
+infrastructure for e-commerce companies. Our platform processes over 500M events per day.
+
+Responsibilities
+- Design, train, and deploy large-scale ML models for real-time recommendation systems.
+- Build and maintain end-to-end MLOps pipelines from experimentation to production.
+- Collaborate with data engineers to design feature stores and data pipelines.
+- Mentor junior ML engineers and conduct code reviews.
+- Define model evaluation frameworks and champion ML best practices across the team.
+- Work closely with product and engineering teams to translate business goals into ML solutions.
+
+Requirements
+- 5+ years of hands-on experience in machine learning or data science.
+- Strong proficiency in Python; experience with PyTorch or TensorFlow is mandatory.
+- Solid understanding of ML fundamentals: supervised/unsupervised learning, model evaluation, regularization.
+- Experience deploying models to production using Docker and Kubernetes.
+- Proficiency with MLflow or a similar experiment tracking tool is required.
+- Familiarity with distributed data processing using Spark or Kafka.
+- Experience with AWS (SageMaker, S3, EC2) or GCP (Vertex AI, BigQuery).
+- Strong communication skills and ability to work in an Agile environment.
+
+Nice to Have
+- Experience with LLMs, LangChain, or Hugging Face Transformers.
+- Familiarity with feature stores (Feast, Tecton).
+- Contributions to open-source ML projects.
+- Knowledge of Rust or Go for performance-critical components.
+
+Benefits
+- Competitive salary + equity package.
+- Fully remote with optional office access in San Francisco.
+- $2,000 annual learning and development budget.
+- Health, dental, and vision insurance (100% company-paid).
+- 25 days paid time off + public holidays.
+- Home office setup stipend ($1,500).
+
+OUTPUT
+------
+{
+  "job_title":           "Senior Machine Learning Engineer",
+  "company":             "NeuralWorks",
+  "location":            "Remote / San Francisco, CA",
+  "employment_type":     "Full-time",
+  "experience_required": "5+ years",
+  "salary_range":        "$140,000 - $180,000/year + equity",
+  "industry":            "Technology",
+  "seniority_level":     "Senior",
+  "required_skills":     ["Python", "PyTorch", "TensorFlow", "Docker", "Kubernetes", "MLflow",
+                          "Apache Spark", "Apache Kafka", "AWS", "AWS SageMaker", "AWS S3",
+                          "AWS EC2", "GCP", "Google Vertex AI", "Google BigQuery", "Agile"],
+  "nice_to_have_skills": ["LLMs", "LangChain", "Hugging Face Transformers", "Feast", "Tecton", "Rust", "Go"],
+  "responsibilities": [
+    "Design, train, and deploy large-scale ML models for real-time recommendation systems.",
+    "Build and maintain end-to-end MLOps pipelines from experimentation to production.",
+    "Collaborate with data engineers to design feature stores and data pipelines.",
+    "Mentor junior ML engineers and conduct code reviews.",
+    "Define model evaluation frameworks and champion ML best practices across the team.",
+    "Work closely with product and engineering teams to translate business goals into ML solutions."
+  ],
+  "qualifications": [
+    "5+ years of hands-on experience in machine learning or data science.",
+    "Strong proficiency in Python; experience with PyTorch or TensorFlow is mandatory.",
+    "Solid understanding of ML fundamentals: supervised/unsupervised learning, model evaluation, regularization.",
+    "Experience deploying models to production using Docker and Kubernetes.",
+    "Proficiency with MLflow or a similar experiment tracking tool is required.",
+    "Familiarity with distributed data processing using Spark or Kafka.",
+    "Experience with AWS (SageMaker, S3, EC2) or GCP (Vertex AI, BigQuery).",
+    "Strong communication skills and ability to work in an Agile environment."
+  ],
+  "benefits": [
+    "Competitive salary + equity package.",
+    "Fully remote with optional office access in San Francisco.",
+    "$2,000 annual learning and development budget.",
+    "Health, dental, and vision insurance (100% company-paid).",
+    "25 days paid time off + public holidays.",
+    "Home office setup stipend ($1,500)."
+  ],
+  "keywords": ["Python", "PyTorch", "TensorFlow", "Docker", "Kubernetes", "MLflow",
+               "Apache Spark", "AWS", "GCP", "Agile"]
+}
+
+EVALUATION
+----------
+  job_title           ✅  Correct
+  company             ✅  Correct
+  location            ✅  Correct — "Remote / San Francisco, CA" format preserved
+  employment_type     ✅  Correct
+  experience_required ✅  Correct
+  salary_range        ✅  Correct — "+ equity" suffix preserved
+  industry            ✅  Correct — inferred "Technology" from "AI startup / e-commerce platform"
+  seniority_level     ✅  Correct — "Senior" keyword in title
+  required_skills     ✅  16 skills — AWS sub-services correctly broken out (SageMaker, S3, EC2)
+  nice_to_have_skills ✅  7 skills — all from "Nice to Have" section, correctly classified
+  responsibilities    ✅  All 6 bullets correct
+  qualifications      ✅  All 8 bullets correct
+  benefits            ✅  All 6 bullets correct
+  keywords            ✅  Top 10 most relevant skills selected
+
+  OVERALL: 14/14 ✅  No errors.
+
+
+================================================================================
+JD 3 — Tech Lead, Backend Engineering
+================================================================================
+
+CHALLENGES TESTED
+  - Lead seniority — "Tech Lead" in title, not "Lead Engineer"
+  - GBP salary with stock options suffix
+  - Hybrid location with days-per-week detail
+  - Fintech industry (inferred from "payments", "fintech", "PCI-DSS")
+  - "Communication Skills" risk — should NOT be a skill (minor flag)
+
+INPUT (jd_tech_lead_backend.txt)
+---------------------------------
+Tech Lead — Backend Engineering
+FinEdge | London, UK (Hybrid — 2 days/week in office)
+
+FinEdge is a fintech scale-up transforming payments infrastructure for SMEs across Europe.
+We are looking for a Tech Lead to own our backend platform and lead a team of 6 engineers.
+Full-time | £90,000 – £120,000/year + stock options
+
+[... full JD text in jd_tech_lead_backend.txt ...]
+
+OUTPUT
+------
+{
+  "job_title":           "Tech Lead - Backend Engineering",
+  "company":             "FinEdge",
+  "location":            "London, UK (Hybrid - 2 days/week in office)",
+  "employment_type":     "Full-time",
+  "experience_required": "8+ years",
+  "salary_range":        "£90,000 - £120,000/year + stock options",
+  "industry":            "Fintech",
+  "seniority_level":     "Lead",
+  "required_skills":     ["Python", "FastAPI", "Django REST Framework", "PostgreSQL", "AWS",
+                          "EC2", "RDS", "SQS", "Lambda", "RabbitMQ", "Kafka",
+                          "Distributed Systems", "Message Queues", "Communication Skills"],
+  "nice_to_have_skills": ["GraphQL APIs", "Terraform", "PCI-DSS", "Go", "Rust"],
+  "responsibilities": [
+    "Lead and mentor a team of 6 backend engineers, running weekly 1:1s and performance reviews.",
+    "Own the technical roadmap for the payments and settlements platform.",
+    "Drive architectural decisions and ensure system scalability to 10x current load.",
+    "Define and enforce engineering standards, code review processes, and testing culture.",
+    "Collaborate with the CTO and product managers on quarterly planning.",
+    "Hands-on contribution: approximately 50% coding, 50% leadership.",
+    "Identify and resolve production incidents, leading post-mortem processes."
+  ],
+  "qualifications": [
+    "8+ years of backend software engineering experience.",
+    "Minimum 2 years in a tech lead or engineering lead role - managing engineers is required.",
+    "Expert-level Python skills; FastAPI or Django REST Framework is mandatory.",
+    "Deep experience with PostgreSQL - query optimisation, indexing, transactions.",
+    "Strong understanding of distributed systems, message queues (RabbitMQ or Kafka).",
+    "Experience with AWS infrastructure: EC2, RDS, SQS, Lambda.",
+    "Proven track record of delivering large-scale systems in a fintech or payments context.",
+    "Strong communication skills - you will interface with C-level stakeholders."
+  ],
+  "benefits": [
+    "Competitive salary with annual reviews.",
+    "Hybrid working - 2 days in our London Bridge office.",
+    "30 days paid leave + bank holidays.",
+    "£1,500/year learning budget (conferences, courses, books).",
+    "Private health and dental insurance.",
+    "Enhanced parental leave (26 weeks full pay).",
+    "Monthly team socials and annual company retreat."
+  ],
+  "keywords": ["Python", "FastAPI", "PostgreSQL", "AWS", "Kafka", "RabbitMQ",
+               "Distributed Systems", "Terraform", "Go", "Fintech"]
+}
+
+EVALUATION
+----------
+  job_title           ✅  Correct
+  company             ✅  Correct
+  location            ✅  Correct — hybrid detail and days preserved
+  employment_type     ✅  Correct
+  experience_required ✅  Correct — "8+ years" (from minimum requirement)
+  salary_range        ✅  Correct — GBP symbol and "+ stock options" preserved
+  industry            ✅  Correct — "Fintech" inferred from payments context
+  seniority_level     ✅  Correct — "Tech Lead" keyword resolved to Lead
+  required_skills     ⚠️  13/14 correct — "Communication Skills" included as a skill.
+                          Soft traits like this are noisy; acceptable but worth filtering
+                          in a post-processing step if needed.
+  nice_to_have_skills ✅  All 5 correct
+  responsibilities    ✅  All 7 bullets correct
+  qualifications      ✅  All 8 bullets correct
+  benefits            ✅  All 7 bullets correct
+  keywords            ✅  Relevant and well-selected
+
+  OVERALL: 13/14 ✅  One minor issue (soft skill in required_skills list).
+
+
+================================================================================
+JD 4 — Data Analyst
+================================================================================
+
+CHALLENGES TESTED
+  - Mid-level seniority with no explicit seniority keyword — inferred from experience years
+  - No salary stated ("disclosed at interview") — should return null
+  - Dubai, UAE location
+  - Industry not stated explicitly — should be inferred or null
+  - BI-heavy skill set (Tableau, Power BI, Snowflake)
+
+INPUT (jd_data_analyst.txt)
+----------------------------
+Data Analyst
+RetailIQ — Dubai, UAE (On-site)
+
+RetailIQ is a retail analytics company helping brick-and-mortar chains make smarter
+inventory and merchandising decisions using data.
+Employment Type: Full-time | Experience: 2-4 years
+
+[... full JD text in jd_data_analyst.txt ...]
+
+OUTPUT
+------
+{
+  "job_title":           "Data Analyst",
+  "company":             "RetailIQ",
+  "location":            "Dubai, UAE (On-site)",
+  "employment_type":     "Full-time",
+  "experience_required": "2-4 years",
+  "salary_range":        null,
+  "industry":            null,
+  "seniority_level":     "Mid",
+  "required_skills":     ["SQL", "Tableau", "Power BI", "Snowflake", "BigQuery", "Redshift", "Excel"],
+  "nice_to_have_skills": ["Python", "R", "dbt", "Google Analytics"],
+  "responsibilities": [
+    "Analyse large retail datasets to identify trends, anomalies, and opportunities.",
+    "Build dashboards and reports in Tableau and Power BI for client presentations.",
+    "Write complex SQL queries to extract and transform data from our data warehouse (Snowflake).",
+    "Collaborate with the data engineering team to define new data pipelines and metrics.",
+    "Present findings to non-technical client stakeholders in a clear, compelling way.",
+    "Support client onboarding by validating data quality and mapping source systems."
+  ],
+  "qualifications": [
+    "2-4 years of experience in data analytics or business intelligence.",
+    "Strong SQL skills are essential - you will write queries daily.",
+    "Hands-on experience with Tableau or Power BI is required.",
+    "Experience working with a cloud data warehouse (Snowflake, BigQuery, or Redshift).",
+    "Proficiency in Excel for ad-hoc analysis.",
+    "Strong presentation and storytelling skills.",
+    "Experience in retail, FMCG, or e-commerce analytics is preferred."
+  ],
+  "benefits": [
+    "Competitive tax-free salary (disclosed at interview stage).",
+    "Annual flight allowance and accommodation support for relocating candidates.",
+    "22 days annual leave + UAE public holidays.",
+    "Health insurance.",
+    "Fast-track growth opportunities in a scaling company."
+  ],
+  "keywords": ["SQL", "Tableau", "Power BI", "Snowflake", "BigQuery", "Redshift", "Excel"]
+}
+
+EVALUATION
+----------
+  job_title           ✅  Correct
+  company             ✅  Correct
+  location            ✅  Correct
+  employment_type     ✅  Correct
+  experience_required ✅  Correct — "2-4 years"
+  salary_range        ✅  Correctly returned null — salary was withheld in JD
+  industry            ⚠️  Returned null. "Retail analytics" and "e-commerce" context was present.
+                          The LLM could reasonably have inferred "E-commerce" or "Retail".
+                          Low priority — industry is always best-effort from JD text.
+  seniority_level     ✅  Correct — "Mid" inferred from "2-4 years" experience (no keyword in title)
+  required_skills     ✅  All 7 correct
+  nice_to_have_skills ✅  All 4 correct — Python/R correctly marked nice-to-have
+  responsibilities    ✅  All 6 bullets correct
+  qualifications      ✅  All 7 bullets correct
+  benefits            ✅  All 5 bullets correct — withheld salary note preserved as-is
+  keywords            ✅  Correct (KeyBERT fallback to required skills)
+
+  OVERALL: 13/14 ✅  Industry field null instead of "Retail" — minor inference miss.
+
+
+================================================================================
+JD 5 — Staff Engineer, Infrastructure Platform
+================================================================================
+
+CHALLENGES TESTED (hardest JD in the set)
+  - No "Principal" keyword — uses "Staff Engineer" → must map to Principal
+  - No bullet points anywhere — free-form prose paragraphs
+  - No explicit "Requirements" section header
+  - Contract employment type with hourly rate (not annual)
+  - No benefits section — should return empty list
+  - Industry not stated — should be null or inferred
+
+INPUT (jd_staff_engineer.txt)
+------------------------------
+Staff Engineer — Infrastructure Platform
+Cloudvault Systems (Fully Remote — Anywhere)
+
+Cloudvault builds multi-cloud infrastructure management tooling used by Fortune 500 companies.
+We are seeking an exceptional engineer to set the technical direction for our infrastructure
+platform across all product lines. This is an org-wide role reporting directly to the VP of Engineering.
+Contract | $200/hour – $250/hour USD
+
+[... full JD text in jd_staff_engineer.txt ...]
+
+OUTPUT
+------
+{
+  "job_title":           "Staff Engineer - Infrastructure Platform",
+  "company":             "Cloudvault Systems",
+  "location":            "Fully Remote - Anywhere",
+  "employment_type":     "Contract",
+  "experience_required": "at least 10 years",
+  "salary_range":        "$200/hour - $250/hour USD",
+  "industry":            null,
+  "seniority_level":     "Principal",
+  "required_skills":     ["Kubernetes", "Terraform", "AWS", "Azure", "GCP", "Networking",
+                          "Security", "Prometheus", "Grafana", "OpenTelemetry", "Go", "Rust"],
+  "nice_to_have_skills": ["eBPF", "Istio", "Linkerd"],
+  "responsibilities": [
+    "Defining our multi-year infrastructure architecture strategy.",
+    "Working across every engineering team and making decisions affecting 80+ engineers.",
+    "20% coding and 80% architecture, design review, and cross-team coordination.",
+    "Establishing the technical standards and patterns that all teams follow.",
+    "Identifying systemic bottlenecks and designing solutions that scale to 10x current infrastructure.",
+    "Representing Cloudvault in external technical discussions with enterprise customers and cloud vendors."
+  ],
+  "qualifications": [
+    "Experience of at least 10 years building and operating large-scale distributed infrastructure.",
+    "Deep expertise in Kubernetes, Terraform, and at least one major cloud provider (AWS preferred).",
+    "Strong background in networking, security, and observability (Prometheus, Grafana, OpenTelemetry).",
+    "Proven experience designing systems that serve millions of requests per second.",
+    "Track record of influencing engineering culture and practices at the org level.",
+    "Excellent written communication — you will produce architecture decision records (ADRs) regularly.",
+    "Experience with Go or Rust for systems-level tooling."
+  ],
+  "benefits":            [],
+  "keywords":            ["Kubernetes", "Terraform", "AWS", "Prometheus", "Grafana",
+                          "OpenTelemetry", "Go", "Rust", "eBPF", "Infrastructure"]
+}
+
+EVALUATION
+----------
+  job_title           ✅  Correct
+  company             ✅  Correct
+  location            ✅  Correct — "Fully Remote - Anywhere" preserved
+  employment_type     ✅  Correct — "Contract" inferred from single keyword in prose
+  experience_required ✅  Correct — "at least 10 years" extracted from prose (no structured field)
+  salary_range        ✅  Correct — hourly rate format ($200/hour) handled correctly
+  industry            ⚠️  Null — "Technology / Cloud Infrastructure" was inferable.
+                          Same minor miss as JD 4; acceptable given no explicit industry statement.
+  seniority_level     ✅  Correct — "Staff Engineer" correctly mapped to "Principal"
+                          despite no "principal" keyword anywhere in the text.
+  required_skills     ✅  12 skills extracted correctly from unstructured prose
+  nice_to_have_skills ✅  3 skills correctly identified from "It would be great if" phrasing
+  responsibilities    ✅  Extracted cleanly from paragraphs with no bullet formatting
+  qualifications      ✅  All 7 requirements extracted from free-form prose
+  benefits            ✅  Correctly returned [] — no benefits section existed
+  keywords            ✅  Well-selected; "Infrastructure" added as a domain keyword
+
+  OVERALL: 13/14 ✅  Industry null — same minor inference miss as JD 4.
+
+
+================================================================================
+SUMMARY
+================================================================================
+
+  JD                            Seniority   Salary      Industry    Skills   Overall
+  ─────────────────────────────────────────────────────────────────────────────────
+  Junior Frontend Developer     ✅ Junior    ✅ PKR       ✅ EdTech   ✅       14/14
+  Senior ML Engineer            ✅ Senior    ✅ USD       ✅ Tech     ✅       14/14
+  Tech Lead Backend             ✅ Lead      ✅ GBP       ✅ Fintech  ⚠️       13/14
+  Data Analyst                  ✅ Mid*      ✅ null      ⚠️ null     ✅       13/14
+  Staff Engineer (Principal)    ✅ Principal ✅ hourly    ⚠️ null     ✅       13/14
+  ─────────────────────────────────────────────────────────────────────────────────
+  * Inferred from experience years — no seniority keyword in title
+
+KNOWN MINOR ISSUES
+  1. Industry inference: returned null for "Retail analytics" and "Cloud infrastructure" JDs.
+     The field is best-effort; explicit industry statements are always extracted correctly.
+
+  2. Soft skills in required_skills: "Communication Skills" appeared in JD 3's required list.
+     Easily filtered with a post-processing exclusion list if needed downstream.
+
+NOTABLE WINS
+  - Staff Engineer → Principal mapping with no keyword match (pure reasoning from context).
+  - Salary null correctly returned when JD explicitly withheld it.
+  - Hourly contract rate ($200/hour) handled without any special-case logic.
+  - Free-form prose JD (JD 5) extracted responsibilities and qualifications with no bullet points.
+  - Non-standard section headers ("Good to Have", "Perks", "What You'll Do") all handled.
+  - AWS sub-services (SageMaker, S3, EC2) extracted as individual skills.

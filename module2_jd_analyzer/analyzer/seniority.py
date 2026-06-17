@@ -1,84 +1,186 @@
-"""
-seniority.py — Detect the seniority level of a role from JD text.
+# ============================================================
+# seniority.py — LLM-powered seniority level detection from JD text.
+#
+# Replaces the keyword-scan + experience-year fallback heuristics
+# with a single structured LLM call via instructor + Groq.
+#
+# Returns one of: "Junior" | "Mid" | "Senior" | "Lead" | "Principal" | None
+#
+# Dependencies:
+#   pip install groq instructor pydantic python-dotenv
+#
+# Usage:
+#   from analyzer.seniority import detect_seniority
+#   level = detect_seniority(clean_text)
+# ============================================================
 
-Strategy (two layers):
-  1. Keyword scan — fast, covers 90% of cases.
-  2. Experience-year fallback — if no keyword matched, infer from
-     the years-of-experience figure extracted elsewhere.
-
-Returns one of: "Junior" | "Mid" | "Senior" | "Lead" | "Principal"
-Returns None if there is genuinely no signal.
-"""
-
+import os
 import re
+from typing import Literal, Optional
+
+from dotenv import load_dotenv
+from groq import Groq
+import instructor
+from pydantic import BaseModel, Field
+
+load_dotenv()
+
+# ── Instructor-patched Groq client ────────────────────────────────────────
+_client = instructor.from_groq(
+    Groq(api_key=os.getenv("GROQ_API_KEY")),
+    mode=instructor.Mode.JSON,
+)
 
 
-# --------------------------------------------------------------------------
-# Keyword → seniority mapping.
-# Checked in order — first match wins.  More specific terms go first.
-# --------------------------------------------------------------------------
-SENIORITY_KEYWORDS: list[tuple[str, list[str]]] = [
-    ("Principal", ["principal", "staff engineer", "distinguished", "fellow"]),
-    ("Lead",      ["tech lead", "team lead", "engineering lead", "lead engineer",
-                   "lead developer"]),
-    ("Senior",    ["senior", "sr.", "sr ", "5+ years", "6+ years", "7+ years",
-                   "8+ years", "10+ years"]),
-    ("Mid",       ["mid-level", "mid level", "intermediate", "2-5 years",
-                   "3-5 years", "3+ years", "4+ years"]),
-    ("Junior",    ["junior", "entry level", "entry-level", "associate",
-                   "graduate", "0-2 years", "1-2 years", "fresh"]),
-]
+# ============================================================
+# SECTION 1 — PYDANTIC MODEL
+# ============================================================
+
+SeniorityLevel = Literal["Junior", "Mid", "Senior", "Lead", "Principal"]
 
 
-def _years_to_seniority(years_str: str) -> str | None:
+class SeniorityResult(BaseModel):
+    level: Optional[SeniorityLevel] = Field(
+        None,
+        description=(
+            "The seniority level of the role. Choose exactly one of: "
+            "'Junior', 'Mid', 'Senior', 'Lead', 'Principal'. "
+            "Return null if there is genuinely no signal. "
+            "\n\nGuidelines:"
+            "\n- Junior:    entry-level, graduate, associate, 0–2 years exp."
+            "\n- Mid:       intermediate, mid-level, 2–5 years exp."
+            "\n- Senior:    'senior', 'sr.', 5+ years exp., owns significant scope."
+            "\n- Lead:      tech lead, team lead, engineering lead, lead engineer — "
+            "manages or coordinates other engineers."
+            "\n- Principal: principal engineer, staff engineer, distinguished, "
+            "fellow — org-wide technical leadership."
+            "\n\nPriority: explicit title keywords > years of experience > "
+            "implied responsibility level."
+        ),
+    )
+    reasoning: str = Field(
+        description=(
+            "One sentence explaining which signal (title keyword, experience "
+            "years, or responsibility scope) determined the level."
+        )
+    )
+
+
+# ============================================================
+# SECTION 2 — PROMPT
+# ============================================================
+
+_SYSTEM_PROMPT = """\
+You are an expert at analysing job descriptions and determining the seniority \
+level of the role being advertised.
+
+Given a job description, identify the seniority level using these signals \
+(in order of priority):
+1. Explicit title keywords: "junior", "senior", "lead", "principal", "staff", etc.
+2. Years of experience required: 0–2 → Junior, 2–5 → Mid, 5–8 → Senior, 8+ → Lead.
+3. Implied scope: managing teams → Lead; org-wide decisions → Principal.
+
+Return a structured JSON with the level and a brief reasoning sentence.
+Return null for level only if there is absolutely no signal in the text.
+"""
+
+
+# ============================================================
+# SECTION 3 — MAIN FUNCTION
+# ============================================================
+
+def detect_seniority(
+    text: str,
+    experience_required: Optional[str] = None,
+    *,
+    model: str = "llama-3.3-70b-versatile",
+    max_tokens: int = 256,
+    max_retries: int = 2,
+) -> Optional[SeniorityLevel]:
     """
-    Given a string like '3-5 years' or '7+ years', return a seniority label.
-    Only called when keyword matching found nothing.
-    """
-    # Pull out all numbers from the string
-    nums = list(map(int, re.findall(r"\d+", years_str)))
-    if not nums:
-        return None
-
-    # Use the highest number mentioned (upper bound or the single figure)
-    max_years = max(nums)
-
-    if max_years <= 2:
-        return "Junior"
-    elif max_years <= 5:
-        return "Mid"
-    elif max_years <= 8:
-        return "Senior"
-    else:
-        return "Lead"
-
-
-def detect_seniority(text: str, experience_required: str | None = None) -> str | None:
-    """
-    Main entry point.
+    Detect the seniority level of a role from a job description.
 
     Args:
-        text:                Full cleaned JD text (lowercased inside this fn).
-        experience_required: Optional string like "3-5 years" already extracted
-                             by extractor.py — used as fallback.
+        text:                Full cleaned JD text.
+        experience_required: Optional pre-extracted experience string
+                             (e.g. "3-5 years") to include as a hint.
+                             Saves the LLM from re-parsing it.
+        model:               Groq model to use.
+        max_tokens:          Max tokens for the LLM response.
+        max_retries:         Retry attempts if Pydantic validation fails.
 
     Returns:
-        Seniority string or None.
+        One of "Junior" | "Mid" | "Senior" | "Lead" | "Principal", or None.
 
     Usage:
         from analyzer.seniority import detect_seniority
         level = detect_seniority(clean_text, experience_str)
     """
-    lower = text.lower()
+    clean = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", text).strip()
 
-    # Layer 1 — keyword scan
-    for level, keywords in SENIORITY_KEYWORDS:
-        for kw in keywords:
-            if kw in lower:
-                return level
+    # Optionally inject the pre-extracted experience string as a hint
+    hint = (
+        f"\n\n[Pre-extracted experience requirement: {experience_required}]"
+        if experience_required
+        else ""
+    )
 
-    # Layer 2 — fall back to experience years
-    if experience_required:
-        return _years_to_seniority(experience_required)
+    result: SeniorityResult = _client.chat.completions.create(
+        model=model,
+        max_tokens=max_tokens,
+        max_retries=max_retries,
+        messages=[
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": f"Determine the seniority level of this role:{hint}\n\n{clean}",
+            },
+        ],
+        response_model=SeniorityResult,
+    )
 
-    return None
+    print("\n========== SENIORITY DETECTOR OUTPUT ==========")
+    print(f"Level:     {result.level}")
+    print(f"Reasoning: {result.reasoning}")
+    print("================================================\n")
+
+    return result.level
+
+
+# ============================================================
+# SECTION 4 — QUICK TEST
+# ============================================================
+
+if __name__ == "__main__":
+    tests = [
+        (
+            "Junior Python Developer\nWe are hiring a fresh graduate or someone "
+            "with 0-2 years of experience to join our team.",
+            None,
+        ),
+        (
+            "Senior ML Engineer\nRequirements: 5+ years of experience in machine "
+            "learning. Strong Python skills. Experience with PyTorch.",
+            "5+ years",
+        ),
+        (
+            "Tech Lead – Platform Engineering\nYou will lead a team of 6 engineers, "
+            "define technical roadmap, and own cross-team architecture decisions.",
+            None,
+        ),
+        (
+            "Principal Engineer\nWe are looking for a distinguished engineer to set "
+            "org-wide technical strategy across all product lines.",
+            None,
+        ),
+        (
+            "Software Engineer\nWe need someone with 3-5 years of backend experience "
+            "to build APIs and maintain our data pipelines.",
+            "3-5 years",
+        ),
+    ]
+
+    for jd_text, exp in tests:
+        level = detect_seniority(jd_text, exp)
+        print(f"Input snippet: {jd_text[:60]}…")
+        print(f"Result: {level}\n")
