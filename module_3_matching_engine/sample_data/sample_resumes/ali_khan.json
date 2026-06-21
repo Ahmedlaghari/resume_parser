@@ -1,0 +1,7 @@
+{
+  "candidate_name": "Ali Khan",
+  "skills": ["Python", "Docker", "Java", "TensorFlow"],
+  "total_years_experience": 2,
+  "highest_degree": "Bachelors",
+  "summary_text": "Backend and ML developer with 2 years of experience in Python services and containerization. Some exposure to TensorFlow-based model training."
+}

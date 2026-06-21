@@ -1,0 +1,7 @@
+{
+  "candidate_name": "Maria Lopez",
+  "skills": ["Python", "Java", "Docker", "AWS", "PyTorch", "Kubernetes"],
+  "total_years_experience": 4,
+  "highest_degree": "Masters",
+  "summary_text": "Full-stack ML engineer with 4 years deploying PyTorch models to AWS using Docker and Kubernetes. Comfortable across both Python and Java codebases."
+}
