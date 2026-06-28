@@ -14,7 +14,7 @@ Then apply the weighted-average formula from the spec:
     skills_score = sum(weight_i * match_i) / sum(weight_i)
 """
 
-from .semantic_matcher import get_embedder, embed_texts, cosine_similarity
+from .semantic_matcher import embed_texts, cosine_similarity
 from .models import SkillMatchDetail
 
 SIMILARITY_THRESHOLD = 0.75  # tune this if matches feel too loose/strict
@@ -29,30 +29,6 @@ def _exact_match(jd_skill: str, candidate_skills: list[str]) -> str | None:
     return None
 
 
-def _best_semantic_match(jd_skill: str, candidate_skills: list[str]) -> tuple[str | None, float]:
-    """
-    Embeds jd_skill and every candidate skill, returns the
-    (best_matching_skill, similarity_score) pair. If candidate_skills
-    is empty, returns (None, 0.0).
-    """
-    if not candidate_skills:
-        return None, 0.0
-
-    all_texts = [jd_skill] + candidate_skills
-    embeddings = embed_texts(all_texts)
-    jd_vec = embeddings[0]
-    cand_vecs = embeddings[1:]
-
-    best_skill = None
-    best_score = 0.0
-    for skill, vec in zip(candidate_skills, cand_vecs):
-        score = cosine_similarity(jd_vec, vec)
-        if score > best_score:
-            best_score = score
-            best_skill = skill
-    return best_skill, best_score
-
-
 def match_skills(
     required_skills: list[str],
     candidate_skills: list[str],
@@ -65,14 +41,18 @@ def match_skills(
     not present in this dict defaults to weight 1.0 (per spec).
     """
     if not required_skills:
-        # Nothing was asked for, so there's nothing to fail.
         return 100.0, []
+
+    # Embed all JD skills and all candidate skills in two batches up front,
+    # so we don't re-embed the candidate list once per unmatched JD skill.
+    jd_vecs = embed_texts(required_skills)
+    cand_vecs = embed_texts(candidate_skills) if candidate_skills else None
 
     weighted_sum = 0.0
     weight_total = 0.0
     details: list[SkillMatchDetail] = []
 
-    for jd_skill in required_skills:
+    for i, jd_skill in enumerate(required_skills):
         weight = skill_weights.get(jd_skill, 1.0)
         weight_total += weight
 
@@ -81,16 +61,27 @@ def match_skills(
             match_score = 1.0
             matched = True
             candidate_has = exact
-        else:
-            best_skill, similarity = _best_semantic_match(jd_skill, candidate_skills)
-            if similarity >= SIMILARITY_THRESHOLD:
-                match_score = similarity
+        elif cand_vecs is not None:
+            jd_vec = jd_vecs[i]
+            best_skill = None
+            best_score = 0.0
+            for skill, vec in zip(candidate_skills, cand_vecs):
+                score = cosine_similarity(jd_vec, vec)
+                if score > best_score:
+                    best_score = score
+                    best_skill = skill
+            if best_score >= SIMILARITY_THRESHOLD:
+                match_score = best_score
                 matched = True
                 candidate_has = best_skill
             else:
                 match_score = 0.0
                 matched = False
                 candidate_has = None
+        else:
+            match_score = 0.0
+            matched = False
+            candidate_has = None
 
         weighted_sum += weight * match_score
         details.append(

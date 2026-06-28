@@ -18,9 +18,12 @@
 
 import os
 import re
+import logging
 from typing import Literal
 
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 from groq import Groq
 import instructor
 from pydantic import BaseModel, Field
@@ -141,10 +144,7 @@ def extract_and_classify_skills(
     required = [s.name for s in result.skills if s.classification == "required"]
     nice_to_have = [s.name for s in result.skills if s.classification == "nice_to_have"]
 
-    print("\n========== SKILL CLASSIFIER OUTPUT ==========")
-    print(f"Required ({len(required)}):       {required}")
-    print(f"Nice-to-have ({len(nice_to_have)}): {nice_to_have}")
-    print("=============================================\n")
+    logger.debug("Skill classifier: required=%s  nice_to_have=%s", required, nice_to_have)
 
     return required, nice_to_have
 

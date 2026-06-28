@@ -13,9 +13,12 @@
 # ============================================================
 
 import os
+import logging
 from dotenv import load_dotenv
 
 load_dotenv()  # reads .env and puts variables into os.environ
+
+logger = logging.getLogger(__name__)
 
 from groq import Groq
 import re
@@ -208,9 +211,7 @@ def extract_resume_datallm(
         ],
         response_model=ResumeData,
     )
-    print("\n========== LLM EXTRACTOR OUTPUT ==========")
-    print(resume.model_dump_json(indent=2))
-    print("==========================================\n")
+    logger.debug("LLM extractor output:\n%s", resume.model_dump_json(indent=2))
 
     return resume
 

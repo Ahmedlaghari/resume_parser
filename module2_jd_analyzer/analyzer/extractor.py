@@ -19,8 +19,11 @@
 
 import os
 import re
+import logging
 
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 from groq import Groq
 import instructor
 
@@ -110,9 +113,7 @@ def extract_jd_data(
         response_model=JobDescription,
     )
 
-    print("\n========== JD EXTRACTOR OUTPUT ==========")
-    print(result.model_dump_json(indent=2))
-    print("=========================================\n")
+    logger.debug("JD extractor output:\n%s", result.model_dump_json(indent=2))
 
     return result
 

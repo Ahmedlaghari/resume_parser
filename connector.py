@@ -28,10 +28,14 @@ import argparse
 import pathlib
 import requests
 
+# Pull adapt_resume / adapt_jd from Module 3's integration layer
+sys.path.insert(0, str(pathlib.Path(__file__).parent / "module_3_matching_engine"))
+from integration.adapters import adapt_resume, adapt_jd
+
 # ── Server URLs — change ports here if yours differ ──────────
 MODULE1_URL = "http://localhost:8000/parse-resume"
-MODULE2_URL = "http://localhost:8001/analyze-jd-file"
-MODULE3_URL = "http://localhost:8002/match-candidates"
+MODULE2_URL = "http://localhost:8002/analyze-jd-file"
+MODULE3_URL = "http://localhost:8001/match-candidates"
 
 # ── Weights to use — edit or pass --weights file to override ─
 DEFAULT_SKILL_WEIGHTS = {
@@ -107,93 +111,9 @@ def analyze_jd(file_path: pathlib.Path) -> dict:
 
 
 # ============================================================
-# STEP 3 — adapt Module 1 + 2 outputs → Module 3 input
+# STEP 3 — adapt outputs (imported from integration/adapters.py)
 # ============================================================
-
-def adapt_resume(m1: dict) -> dict:
-    """Translates Module 1 field names into Module 3's expected shape."""
-
-    # Calculate total years from experience list
-    import re
-    total_years = 0.0
-    for job in m1.get("experience", []):
-        start = str(job.get("start_year") or job.get("start") or "")
-        end   = str(job.get("end_year")   or job.get("end")   or "")
-        s = re.search(r"(\d{4})", start)
-        e = re.search(r"(\d{4})", end)
-        if s and e:
-            total_years += float(e.group(1)) - float(s.group(1))
-        else:
-            total_years += 1.5   # rough fallback per job entry
-
-    # Find highest degree
-    degree_rank = {"phd": 4, "doctorate": 4, "masters": 3, "master": 3,
-                   "ms": 3, "msc": 3, "bs": 2, "bsc": 2, "bachelor": 2,
-                   "bachelors": 2, "associate": 1, "a-levels": 1}
-    best_degree = None
-    best_rank   = 0
-    for edu in m1.get("education", []):
-        raw = edu.get("degree", "").lower()
-        for key, rank in degree_rank.items():
-            if key in raw and rank > best_rank:
-                best_rank   = rank
-                best_degree = {"phd": "PhD", "doctorate": "PhD",
-                               "masters": "Masters", "master": "Masters",
-                               "ms": "Masters", "msc": "Masters",
-                               "bs": "Bachelors", "bsc": "Bachelors",
-                               "bachelor": "Bachelors", "bachelors": "Bachelors",
-                               "associate": "Associate", "a-levels": "Associate"}[key]
-
-    # Build summary text from summary + project descriptions
-    parts = [m1.get("summary", "")]
-    for p in m1.get("projects", []):
-        if p.get("description"):
-            parts.append(p["description"])
-    summary_text = " ".join(filter(None, parts))
-
-    return {
-        "candidate_name":         m1.get("name", "Unknown"),
-        "skills":                  m1.get("skills", []),
-        "total_years_experience":  round(total_years, 1),
-        "highest_degree":          best_degree,
-        "summary_text":            summary_text,
-    }
-
-
-def adapt_jd(m2: dict) -> dict:
-    """Translates Module 2 field names into Module 3's expected shape."""
-    import re
-
-    # Parse "5+ years" or "3-5 years" → min, max
-    exp_str = m2.get("experience_required", "")
-    min_exp, max_exp = 0.0, None
-    m = re.search(r"(\d+)\s*\+", exp_str)
-    if m:
-        min_exp = float(m.group(1))
-    else:
-        m = re.search(r"(\d+)\s*[-to]+\s*(\d+)", exp_str)
-        if m:
-            min_exp = float(m.group(1))
-            max_exp = float(m.group(2))
-        else:
-            m = re.search(r"(\d+)", exp_str)
-            if m:
-                min_exp = float(m.group(1))
-
-    responsibilities = m2.get("responsibilities", [])
-    qualifications   = m2.get("qualifications", [])
-
-    return {
-        "job_title":            m2.get("job_title", ""),
-        "required_skills":      m2.get("required_skills", []),
-        "preferred_skills":     m2.get("nice_to_have_skills", []),
-        "min_years_experience": min_exp,
-        "max_years_experience": max_exp,
-        "required_education":   None,
-        "responsibilities_text": "\n".join(responsibilities),
-        "qualifications_text":   "\n".join(qualifications),
-    }
-
+# adapt_resume() and adapt_jd() are imported at the top of this file.
 
 # ============================================================
 # STEP 4 — send everything to Module 3

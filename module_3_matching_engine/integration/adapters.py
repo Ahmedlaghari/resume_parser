@@ -11,6 +11,7 @@
 # ============================================================
 
 import re
+import datetime
 
 
 # ============================================================
@@ -141,29 +142,46 @@ def _parse_experience_string(exp_str: str) -> tuple[float, float | None]:
 
 def _calc_years_experience(experience_list: list[dict]) -> float:
     """
-    Module 1 outputs experience as a list of job objects, each with
-    start/end dates. This calculates total years.
+    Module 1 outputs experience as a list of job objects. This calculates
+    total years by parsing start/end fields or the combined `duration` string
+    (e.g. "Jan 2020 – Present", "2018 - 2022").
 
-    If the list is empty (like for Ahmed who is a student), returns 0.
-    If dates are present, tries to sum durations. Falls back to counting
-    entries × 1.5 years as a rough estimate if dates aren't parseable.
+    "Present"/"Current"/"Now" end dates are resolved to the current calendar year.
+    Falls back to 1.5 years per entry when dates can't be parsed at all.
     """
     if not experience_list:
         return 0.0
 
+    current_year = datetime.datetime.now().year
+    _year_re = re.compile(r"\b((?:19|20)\d{2})\b")
+    _present_re = re.compile(r"(?i)\b(?:present|current|now)\b")
+
     total = 0.0
     for job in experience_list:
-        # Try to extract years from duration strings like "2020 - 2022"
-        start = job.get("start_year") or job.get("start") or ""
-        end = job.get("end_year") or job.get("end") or "Present"
+        start_str = str(job.get("start_year") or job.get("start") or "").strip()
+        end_str   = str(job.get("end_year")   or job.get("end")   or "").strip()
 
-        start_match = re.search(r"(\d{4})", str(start))
-        end_match = re.search(r"(\d{4})", str(end))
+        # Module 1 stores dates in a single "duration" field like "Jan 2020 – Present"
+        if not start_str and not end_str:
+            duration = str(job.get("duration") or "").strip()
+            years_found = _year_re.findall(duration)
+            if years_found:
+                start_str = years_found[0]
+                end_str = years_found[1] if len(years_found) >= 2 else (
+                    str(current_year) if _present_re.search(duration) else ""
+                )
 
-        if start_match and end_match:
-            total += float(end_match.group(1)) - float(start_match.group(1))
+        start_match = _year_re.search(start_str)
+
+        if _present_re.search(end_str):
+            end_year = float(current_year)
         else:
-            # Can't parse dates — count each job as ~1.5 years
+            end_match = _year_re.search(end_str)
+            end_year = float(end_match.group(1)) if end_match else None
+
+        if start_match and end_year is not None:
+            total += max(0.0, end_year - float(start_match.group(1)))
+        else:
             total += 1.5
 
     return round(total, 1)

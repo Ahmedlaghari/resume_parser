@@ -16,9 +16,12 @@
 
 import os
 import re
+import logging
 from typing import Literal, Optional
 
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 from groq import Groq
 import instructor
 from pydantic import BaseModel, Field
@@ -139,10 +142,7 @@ def detect_seniority(
         response_model=SeniorityResult,
     )
 
-    print("\n========== SENIORITY DETECTOR OUTPUT ==========")
-    print(f"Level:     {result.level}")
-    print(f"Reasoning: {result.reasoning}")
-    print("================================================\n")
+    logger.debug("Seniority detector: level=%s  reasoning=%s", result.level, result.reasoning)
 
     return result.level
 
