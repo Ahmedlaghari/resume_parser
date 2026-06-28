@@ -1,0 +1,10 @@
+{
+  "job_title": "Machine Learning Engineer",
+  "required_skills": ["Python", "Java", "Docker", "AWS", "PyTorch"],
+  "preferred_skills": ["Kubernetes"],
+  "min_years_experience": 3,
+  "max_years_experience": 5,
+  "required_education": "Bachelors",
+  "responsibilities_text": "Design, train, and deploy machine learning models for production systems. Collaborate with data engineers to build robust ML pipelines. Optimize model performance and monitor production model drift.",
+  "qualifications_text": "Strong background in Python and deep learning frameworks. Experience deploying models with Docker and cloud infrastructure such as AWS."
+}

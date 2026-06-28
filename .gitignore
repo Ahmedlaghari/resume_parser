@@ -1,0 +1,54 @@
+# ── Virtual environments ──────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Python cache ──────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# ── Environment variables (never commit your API keys) ────────
+.env
+.env.local
+.env.*.local
+
+# ── pytest / testing ──────────────────────────────────────────
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# ── Temp files created by Module 1 (resume uploads) ──────────
+*.tmp
+tmp/
+
+# ── Model cache (sentence-transformers downloads here) ────────
+# These are large and re-downloadable — don't commit them
+.cache/
+models/
+*.bin
+*.safetensors
+
+# ── IDE / editor ──────────────────────────────────────────────
+.idea/
+.vscode/
+*.iml
+
+# ── OS files ──────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Build / packaging ─────────────────────────────────────────
+dist/
+build/
+*.egg-info/
+
+# ── Logs ──────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Module 3 generated test files ────────────────────────────
+module3_matching_engine/sample_data/full_request_example.json

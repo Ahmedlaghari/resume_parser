@@ -1,0 +1,23 @@
+{
+  "name": "Ahmed Ali Laghari",
+  "email": "alaghari082@gmail.com",
+  "phone": "+92 343 216 3386",
+  "location": null,
+  "linkedin": null,
+  "github": "github.com/Ahmedlaghari",
+  "summary": "First-year BSCS student at NUST (H-12, Batch 2029) with a strong self-directed track record in machine learning and data analysis.",
+  "skills": ["Python","Bash","scikit-learn","NumPy","Pandas","Custom Neural Networks","Feature Engineering","Backpropagation","TF-IDF","K-Means","Random Forest","Git","GitHub","Jupyter Notebook","Google Colab"],
+  "experience": [],
+  "education": [
+    {"degree": "BS Computer Science","institution": "NUST","year": "2025-2029"},
+    {"degree": "A-Levels","institution": "Credo College, Karachi","year": "2023-2025"},
+    {"degree": "O-Levels","institution": "Karachi Public School","year": "2021-2023"}
+  ],
+  "projects": [
+    {"name": "Neural Network from Scratch","description": "Designed a feedforward neural network entirely from scratch implementing forward pass, backpropagation, and gradient descent manually without any ML framework.","tech_stack": ["Python","NumPy"]},
+    {"name": "Fake News Detector","description": "Developed a text classification pipeline using TF-IDF vectorisation with Logistic Regression and Naive Bayes.","tech_stack": ["Python","scikit-learn","TF-IDF"]},
+    {"name": "Gold Price Prediction","description": "Predicted gold prices from financial indicators using a RandomForest Regressor with correlation-based feature selection.","tech_stack": ["Python","scikit-learn","Random Forest"]},
+    {"name": "Customer Segmentation","description": "Segmented customers by spending behaviour using K-Means clustering with the Elbow Method.","tech_stack": ["Python","scikit-learn","K-Means"]}
+  ],
+  "certifications": []
+}

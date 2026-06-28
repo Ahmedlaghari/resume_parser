@@ -1,0 +1,7 @@
+pdfplumber
+python-docx
+spacy
+fastapi
+uvicorn
+python-multipart
+python-dotenv

@@ -1,0 +1,7 @@
+{
+  "candidate_name": "Jane Doe",
+  "skills": ["Python", "PyTorch", "Docker", "AWS", "Machine Learning"],
+  "total_years_experience": 4,
+  "highest_degree": "Masters",
+  "summary_text": "ML engineer with 4 years building and deploying deep learning models on AWS. Experienced with PyTorch and containerized deployment pipelines using Docker."
+}

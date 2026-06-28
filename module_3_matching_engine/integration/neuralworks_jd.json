@@ -1,0 +1,27 @@
+{
+  "job_title": "Senior Machine Learning Engineer - AI Platform",
+  "company": "NeuralWorks",
+  "location": "Remote / San Francisco, CA",
+  "employment_type": "Full-time",
+  "experience_required": "5+ years",
+  "salary_range": "$140,000 - $180,000/year + equity",
+  "responsibilities": [
+    "Design, train, and deploy large-scale ML models for real-time recommendation systems.",
+    "Build and maintain end-to-end MLOps pipelines from experimentation to production.",
+    "Collaborate with data engineers to design feature stores and data pipelines.",
+    "Mentor junior ML engineers and conduct code reviews.",
+    "Work closely with product and engineering teams to translate business goals into ML solutions."
+  ],
+  "qualifications": [
+    "5+ years of hands-on experience in machine learning or data science.",
+    "Strong proficiency in Python; experience with PyTorch or TensorFlow is mandatory.",
+    "Experience deploying models to production using Docker and Kubernetes.",
+    "Proficiency with MLflow or a similar experiment tracking tool is required.",
+    "Experience with AWS (SageMaker, S3, EC2) or GCP (Vertex AI, BigQuery)."
+  ],
+  "industry": "Technology",
+  "seniority_level": "Senior",
+  "required_skills": ["Python","PyTorch","TensorFlow","Docker","Kubernetes","MLflow","Apache Spark","Kafka","AWS","SageMaker","S3","EC2","GCP","Vertex AI","BigQuery","Agile"],
+  "nice_to_have_skills": ["LLMs","LangChain","Hugging Face Transformers","Rust","Go"],
+  "keywords": ["Python","PyTorch","TensorFlow","Docker","Kubernetes","MLflow"]
+}

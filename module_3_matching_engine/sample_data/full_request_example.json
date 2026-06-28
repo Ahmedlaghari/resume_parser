@@ -1,0 +1,96 @@
+{
+  "job_description": {
+    "job_title": "Machine Learning Engineer",
+    "required_skills": [
+      "Python",
+      "Java",
+      "Docker",
+      "AWS",
+      "PyTorch"
+    ],
+    "preferred_skills": [
+      "Kubernetes"
+    ],
+    "min_years_experience": 3,
+    "max_years_experience": 5,
+    "required_education": "Bachelors",
+    "responsibilities_text": "Design, train, and deploy machine learning models for production systems. Collaborate with data engineers to build robust ML pipelines. Optimize model performance and monitor production model drift.",
+    "qualifications_text": "Strong background in Python and deep learning frameworks. Experience deploying models with Docker and cloud infrastructure such as AWS."
+  },
+  "candidates": [
+    {
+      "candidate_name": "Ali Khan",
+      "skills": [
+        "Python",
+        "Docker",
+        "Java",
+        "TensorFlow"
+      ],
+      "total_years_experience": 2,
+      "highest_degree": "Bachelors",
+      "summary_text": "Backend and ML developer with 2 years of experience in Python services and containerization. Some exposure to TensorFlow-based model training."
+    },
+    {
+      "candidate_name": "Bilal Raza",
+      "skills": [
+        "Java"
+      ],
+      "total_years_experience": 1,
+      "highest_degree": "Associate",
+      "summary_text": "Junior developer with one year of experience in Java application support."
+    },
+    {
+      "candidate_name": "Jane Doe",
+      "skills": [
+        "Python",
+        "PyTorch",
+        "Docker",
+        "AWS",
+        "Machine Learning"
+      ],
+      "total_years_experience": 4,
+      "highest_degree": "Masters",
+      "summary_text": "ML engineer with 4 years building and deploying deep learning models on AWS. Experienced with PyTorch and containerized deployment pipelines using Docker."
+    },
+    {
+      "candidate_name": "Maria Lopez",
+      "skills": [
+        "Python",
+        "Java",
+        "Docker",
+        "AWS",
+        "PyTorch",
+        "Kubernetes"
+      ],
+      "total_years_experience": 4,
+      "highest_degree": "Masters",
+      "summary_text": "Full-stack ML engineer with 4 years deploying PyTorch models to AWS using Docker and Kubernetes. Comfortable across both Python and Java codebases."
+    },
+    {
+      "candidate_name": "Sara Ahmed",
+      "skills": [
+        "Java",
+        "AWS",
+        "Docker",
+        "Kubernetes"
+      ],
+      "total_years_experience": 5,
+      "highest_degree": "Masters",
+      "summary_text": "Cloud infrastructure engineer with strong AWS and Kubernetes experience. Background in Java backend systems and DevOps automation."
+    }
+  ],
+  "category_weights": {
+    "skills_weight": 0.5,
+    "experience_weight": 0.25,
+    "education_weight": 0.15,
+    "semantic_weight": 0.1
+  },
+  "skill_weights": {
+    "Python": 1.0,
+    "Java": 0.3,
+    "Docker": 0.7,
+    "AWS": 0.6,
+    "PyTorch": 0.9
+  },
+  "generate_explanations": true
+}
