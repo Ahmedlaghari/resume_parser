@@ -25,7 +25,7 @@ from matcher.models import (
     WeightsUsed,
 )
 from matcher.skills_matcher import match_skills
-from matcher.semantic_matcher import semantic_similarity_score
+from matcher.semantic_matcher import embed_jd_text, score_candidate_against_jd_vec
 from matcher.experience_matcher import experience_score
 from matcher.education_matcher import education_score
 from matcher.scorer import combine_scores, normalize_skill_weights, verdict_for_score
@@ -39,7 +39,7 @@ app = FastAPI(
 )
 
 
-def _score_one_candidate(candidate, jd, skill_weights, category_weights):
+def _score_one_candidate(candidate, jd, skill_weights, category_weights, jd_vec):
     """Runs one candidate through all four sub-matchers and combines them."""
     skills_score, skill_match_detail = match_skills(
         required_skills=jd.required_skills,
@@ -58,8 +58,11 @@ def _score_one_candidate(candidate, jd, skill_weights, category_weights):
         required_degree=jd.required_education,
     )
 
-    jd_text = f"{jd.responsibilities_text}\n{jd.qualifications_text}".strip()
-    sem_score = semantic_similarity_score(candidate.summary_text, jd_text)
+    sem_score = (
+        score_candidate_against_jd_vec(candidate.summary_text, jd_vec)
+        if jd_vec is not None
+        else 50.0
+    )
 
     final_score, breakdown, weights_used = combine_scores(
         skills_score=skills_score,
@@ -81,12 +84,16 @@ def match_candidates(request: MatchRequest) -> MatchResponse:
     # Layer 2 weights: fill defaults (1.0) for any unweighted required skill, clip to [0,1]
     skill_weights = normalize_skill_weights(jd.required_skills, request.skill_weights)
 
+    # Embed JD text once; reused across all candidates to avoid redundant model calls.
+    jd_text = f"{jd.responsibilities_text}\n{jd.qualifications_text}".strip()
+    jd_vec = embed_jd_text(jd_text)
+
     scored_candidates = []
     weights_used_normalized = None
 
     for candidate in request.candidates:
         final_score, breakdown, skill_match_detail, missing_critical, weights_used_normalized = (
-            _score_one_candidate(candidate, jd, skill_weights, request.category_weights)
+            _score_one_candidate(candidate, jd, skill_weights, request.category_weights, jd_vec)
         )
 
         if request.generate_explanations:

@@ -61,3 +61,27 @@ def semantic_similarity_score(candidate_summary: str, jd_text: str) -> float:
     embeddings = embed_texts([candidate_summary, jd_text])
     similarity = cosine_similarity(embeddings[0], embeddings[1])
     return round(similarity * 100, 2)
+
+
+def embed_jd_text(jd_text: str) -> np.ndarray | None:
+    """
+    Embeds the JD text once per request so it can be reused across
+    all candidates without re-running the model each time.
+    Returns None if jd_text is empty (callers should treat as neutral 50.0).
+    """
+    jd_text = (jd_text or "").strip()
+    if not jd_text:
+        return None
+    return embed_texts([jd_text])[0]
+
+
+def score_candidate_against_jd_vec(candidate_summary: str, jd_vec: np.ndarray) -> float:
+    """
+    Scores one candidate using a pre-computed JD embedding vector.
+    Embeddings are already L2-normalised so dot product == cosine similarity.
+    """
+    candidate_summary = (candidate_summary or "").strip()
+    if not candidate_summary:
+        return 50.0
+    cand_vec = embed_texts([candidate_summary])[0]
+    return round(float(np.clip(np.dot(cand_vec, jd_vec), 0.0, 1.0)) * 100, 2)
