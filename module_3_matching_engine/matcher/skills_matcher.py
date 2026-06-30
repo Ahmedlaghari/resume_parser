@@ -14,7 +14,9 @@ Then apply the weighted-average formula from the spec:
     skills_score = sum(weight_i * match_i) / sum(weight_i)
 """
 
-from .semantic_matcher import embed_texts, cosine_similarity
+import numpy as np
+
+from .semantic_matcher import embed_texts
 from .models import SkillMatchDetail
 
 SIMILARITY_THRESHOLD = 0.75  # tune this if matches feel too loose/strict
@@ -62,14 +64,12 @@ def match_skills(
             matched = True
             candidate_has = exact
         elif cand_vecs is not None:
-            jd_vec = jd_vecs[i]
-            best_skill = None
-            best_score = 0.0
-            for skill, vec in zip(candidate_skills, cand_vecs):
-                score = cosine_similarity(jd_vec, vec)
-                if score > best_score:
-                    best_score = score
-                    best_skill = skill
+            # Embeddings are already L2-normalised, so dot product == cosine similarity.
+            # One matrix-vector multiply replaces the per-skill Python loop.
+            scores = np.clip(cand_vecs @ jd_vecs[i], 0.0, 1.0)
+            best_idx = int(np.argmax(scores))
+            best_score = float(scores[best_idx])
+            best_skill = candidate_skills[best_idx]
             if best_score >= SIMILARITY_THRESHOLD:
                 match_score = best_score
                 matched = True
